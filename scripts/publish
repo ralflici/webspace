@@ -3,7 +3,7 @@ set -eu
 
 usage() {
     printf '%s\n' 'Usage: ./scripts/publish [--dry-run] SSH_HOST_OR_ALIAS' >&2
-    printf '%s\n' 'Builds the site and syncs it to public_html/ on your Shellter account.' >&2
+    printf '%s\n' 'Builds the site and copies it to public_html/ on your Shellter account.' >&2
 }
 
 dry_run=false
@@ -25,23 +25,12 @@ esac
 
 site_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$site_root"
-command -v rsync >/dev/null 2>&1 || {
-    printf '%s\n' 'rsync is required to publish.' >&2
-    exit 1
-}
-./scripts/zola build
+# Keep the production build separate from the running local preview.
+publish_dir='.cache/publish'
+./scripts/zola build --output-dir "$publish_dir" --force
 
-# Shellter allows 50 MB of published files. Leave room for filesystem overhead.
-size_kb=$(du -sk public | awk '{print $1}')
-if [ "$size_kb" -gt 48000 ]; then
-    printf '%s\n' 'The built site is too close to the 50 MB webspace limit.' >&2
-    exit 1
-fi
-
-set -- -av --delete-delay -e ssh
+set --
 if [ "$dry_run" = true ]; then
-    set -- "$@" --dry-run
+    set -- --dry-run
 fi
-# public_html is the provider-managed link. Copy its contents; keep the link.
-# This directory is dedicated to this site. Remove obsolete generated files.
-rsync "$@" public/ "$target:public_html/"
+exec ./scripts/upload-site "$@" "$publish_dir" "$target"

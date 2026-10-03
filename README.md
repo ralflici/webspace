@@ -6,9 +6,15 @@ A small static technical blog for <https://ralf.shltr.eu>, built with
 
 ## Preview locally
 
-The project requires Zola **0.23.4 or newer**. This checkout has a local 0.23.6
-binary at `.tools/zola`; it is ignored by Git. On another machine, install Zola
-or put a downloaded binary at that location.
+The theme requires Zola **0.23.4 or newer**. CI pins **0.23.6** and verifies
+the downloaded release checksum. On Linux x86_64, install that same version:
+
+```sh
+./scripts/install-zola
+```
+
+The binary at `.tools/zola` is ignored by Git. On another platform, install
+Zola manually; `scripts/zola` also supports a `zola` binary on your PATH.
 
 ```sh
 git submodule update --init --recursive
@@ -59,16 +65,82 @@ make build
 links. To also check external links, run `./scripts/zola check`.
 The generated site is in `public/`, which is ignored by Git.
 
-## Publish to Shellter
+## Automatic publishing with GitHub Actions
 
-Publishing means building the HTML locally and copying **only `public/`'s
-contents** into Shellter's `~/public_html/`. Git pushes back up the source;
-they do not publish the website.
+[Build and publish blog](https://github.com/ralflici/webspace/actions/workflows/site.yml)
+runs on pushes to `main`, pull requests targeting `main`, and manual runs.
+
+- Every run checks the content and scripts, builds with pinned Zola, and saves
+  the production files as an artifact named `site` for seven days.
+- Successful `main` runs deploy that exact artifact to <https://ralf.shltr.eu>
+  when the repository variable `SHELLTER_DEPLOY_ENABLED` equals `true`.
+- Pull requests build only. Draft posts are excluded from production builds.
+- Runs on the same branch are serialized so an upload is not interrupted by
+  a newer run. An older commit is skipped if `main` has already moved on.
+
+The deploy job uses the `shellter` GitHub environment, a dedicated SSH key,
+and the verified Ed25519 host key committed in
+`.github/deployment/shellter_known_hosts`. SSH rejects an unexpected host key
+and never falls back to password authentication. A provider host-key change
+must be verified before updating that file.
+
+### One-time deployment setup
+
+1. Create a dedicated, passphrase-free Ed25519 key for this automation. Keep
+   the private key outside the repository. For example:
+
+   ```sh
+   ssh-keygen -t ed25519 -N '' -C 'GitHub Actions: ralflici/webspace' -f ~/.ssh/webspace-actions
+   ```
+
+2. Add its public key to Shellter's `~/.ssh/authorized_keys`, prefixed with
+   `restrict` to disable forwarding, PTY allocation, and user startup hooks.
+   Enable `webspace on` if needed.
+3. Create the `shellter` environment in repository Settings → Environments,
+   and add its secret `SHELLTER_SSH_KEY` containing the complete private key:
+
+   ```sh
+   gh secret set SHELLTER_SSH_KEY --repo ralflici/webspace --env shellter < ~/.ssh/webspace-actions
+   ```
+
+4. Before enabling automatic uploads, select **Run workflow** on the Actions
+   page, choose `main`, and tick **Check deployment access without uploading
+   files**. Or use:
+
+   ```sh
+   gh workflow run site.yml --repo ralflici/webspace --ref main -f dry_run=true
+   ```
+
+5. After the dry run succeeds, enable automatic publishing:
+
+   ```sh
+   gh variable set SHELLTER_DEPLOY_ENABLED --repo ralflici/webspace --body true
+   ```
+
+Push an update to `main`, or run the workflow manually with the dry-run option
+unchecked, to publish. Setting the variable to `false` disables uploads while
+keeping builds active. Manual dry runs remain available when uploads are
+disabled. To revoke deployment access, remove the dedicated public key from
+Shellter and delete the corresponding GitHub secret.
+
+Actions logs show which build or upload failed; the job summary links to the
+published site. `scp` overwrites matching files but leaves old remote files
+in place, so renamed or deleted pages need manual cleanup. Uploads are not
+atomic: a failed transfer may leave a partially updated site; rerun the workflow
+to complete it.
+
+## Publish manually to Shellter
+
+Publishing means building the HTML locally and copying **only the generated
+files** into Shellter's `~/public_html/`. The helper builds into `.cache/publish/`
+so it does not interfere with a running local preview. This remains useful as
+a fallback to automatic publishing.
 
 Enable the webspace with `webspace on` in your Shellter shell. Use your existing
 SSH configuration, or create an alias called `shellter` with the hostname,
 username `ralf`, port, and identity provided by Shellter. Authenticate the host
-key normally before the first connection. Both machines need `rsync`.
+key normally before the first connection. Uploads use `scp` through SSH's SFTP
+subsystem; no Zola or rsync installation is needed on the server.
 
 First inspect the planned upload:
 
@@ -82,12 +154,14 @@ Then publish:
 ./scripts/publish shellter
 ```
 
-The dry run connects to the server to compare files but does not upload them.
-The real upload makes `public_html/` match the built site, including deleting
-obsolete files in that directory. Use this only when that webspace is dedicated
-to this blog. It preserves the provider-managed `public_html` link. The helper
-checks the local output size before uploading. It has not yet been tested
-against the remote host.
+The dry run checks SSH access and whether `~/public_html/` is writable, then
+lists the local files it would upload. It does not compare file contents or
+change remote files. The real upload copies all generated files, overwriting
+matching filenames and leaving other remote files in place. If you rename or
+remove a page, its old remote files need manual cleanup. It preserves the
+provider-managed `public_html` link. The helper checks the local output size
+before uploading. CI uses the same upload helper with its downloaded artifact;
+it does not rebuild the site during deployment.
 
 Shellter can build with Zola too, but local building avoids depending on the
 host's installed Zola version.
@@ -123,4 +197,10 @@ git commit -m "Update Colorized theme"
 
 Review the theme's release notes before updating; an update can require a newer
 Zola version. Commit the source and theme pointer, never `public/` or `.tools/`.
-Once an empty GitHub repository exists, add its URL as `origin` and push `main`.
+The `origin` remote is `git@github.com:ralflici/webspace.git`. A normal update is:
+
+```sh
+git add content/
+git commit -m "Add a new article"
+git push origin main
+```

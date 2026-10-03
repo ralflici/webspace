@@ -1,0 +1,135 @@
+name: Build and publish blog
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check deployment access without uploading files
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Finish active uploads; newer runs wait rather than interrupting a copy.
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source and pinned theme
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install pinned Zola
+        run: ./scripts/install-zola
+
+      - name: Check site and publishing scripts
+        run: |
+          make check
+          shellcheck scripts/install-zola scripts/zola scripts/publish scripts/upload-site
+
+      - name: Build production site
+        run: ./scripts/zola build --output-dir .cache/publish --force
+
+      - name: Save the built site
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: site
+          path: .cache/publish/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' &&
+      (vars.SHELLTER_DEPLOY_ENABLED == 'true' ||
+       (github.event_name == 'workflow_dispatch' && inputs.dry_run))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: shellter
+      url: https://ralf.shltr.eu
+    steps:
+      - name: Check out deployment helper
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download the checked site
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: site
+          path: .cache/publish/
+
+      - name: Check this is still the latest main commit
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          latest=$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)
+          if [ "$latest" = "$RUN_SHA" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            echo 'Skipping deployment: main has a newer commit.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Configure deploy SSH
+        if: steps.latest.outputs.current == 'true'
+        env:
+          SHELLTER_SSH_KEY: ${{ secrets.SHELLTER_SSH_KEY }}
+        run: |
+          if [ -z "$SHELLTER_SSH_KEY" ]; then
+            echo '::error::Configure the SHELLTER_SSH_KEY Actions secret before deploying.'
+            exit 1
+          fi
+          ssh_dir="$RUNNER_TEMP/webspace-ssh"
+          install -d -m 700 "$ssh_dir"
+          printf '%s\n' "$SHELLTER_SSH_KEY" > "$ssh_dir/key"
+          chmod 600 "$ssh_dir/key"
+          cp .github/deployment/shellter_known_hosts "$ssh_dir/known_hosts"
+          cat > "$ssh_dir/config" <<EOF
+          Host shellter-ci
+              HostName s.shellter.me
+              User ralf
+              Port 2222
+              IdentityFile "$ssh_dir/key"
+              IdentitiesOnly yes
+              IdentityAgent none
+              BatchMode yes
+              StrictHostKeyChecking yes
+              UserKnownHostsFile "$ssh_dir/known_hosts"
+          EOF
+          printf 'WEBSPACE_SSH_CONFIG=%s\n' "$ssh_dir/config" >> "$GITHUB_ENV"
+
+      - name: Publish to Shellter
+        if: steps.latest.outputs.current == 'true'
+        env:
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = true ]; then
+            args+=(--dry-run)
+          fi
+          ./scripts/upload-site "${args[@]}" .cache/publish shellter-ci
+          if [ "$DRY_RUN" = true ]; then
+            echo 'Deployment dry run passed; no remote files changed.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Published to https://ralf.shltr.eu' >> "$GITHUB_STEP_SUMMARY"
+          fi
