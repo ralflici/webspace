@@ -1,5 +1,7 @@
 # Ralf's kernel notes
 
+[![Build and publish blog](https://github.com/ralflici/webspace/actions/workflows/site.yml/badge.svg)](https://github.com/ralflici/webspace/actions/workflows/site.yml)
+
 A small static technical blog for <https://ralf.shltr.eu>, built with
 [Zola](https://www.getzola.org/) and the
 [Colorized theme](https://www.getzola.org/themes/colorized/).
@@ -85,6 +87,10 @@ and never falls back to password authentication. A provider host-key change
 must be verified before updating that file.
 
 ### One-time deployment setup
+
+The initial setup has been completed for this repository, with a dedicated key
+at `~/.ssh/webspace-actions` and its private key stored in the `shellter`
+environment secret. The steps below document how to recreate the setup.
 
 1. Create a dedicated, passphrase-free Ed25519 key for this automation. Keep
    the private key outside the repository. For example:
