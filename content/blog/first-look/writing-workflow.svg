@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="150" viewBox="0 0 800 150" role="img" aria-labelledby="title desc">
+  <title id="title">The blog publishing workflow</title>
+  <desc id="desc">Markdown and images go into Zola, which produces static HTML that is uploaded to Shellter.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a78bfa"/></marker>
+  </defs>
+  <rect width="800" height="150" rx="12" fill="#1a1a2e"/>
+  <g fill="#2a2a40" stroke="#a78bfa" stroke-width="1.5">
+    <rect x="20" y="35" width="170" height="80" rx="8"/>
+    <rect x="225" y="35" width="150" height="80" rx="8"/>
+    <rect x="410" y="35" width="160" height="80" rx="8"/>
+    <rect x="605" y="35" width="175" height="80" rx="8"/>
+  </g>
+  <g fill="#f5f5f5" font-family="sans-serif" font-size="18" text-anchor="middle">
+    <text x="105" y="70">Markdown</text><text x="105" y="94">+ images</text>
+    <text x="300" y="81">Zola</text><text x="490" y="81">Static HTML</text><text x="692" y="81">Shellter</text>
+  </g>
+  <g stroke="#a78bfa" stroke-width="2" marker-end="url(#arrow)">
+    <path d="M 195 75 H 217"/><path d="M 380 75 H 402"/><path d="M 575 75 H 597"/>
+  </g>
+</svg>

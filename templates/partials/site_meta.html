@@ -1,0 +1,13 @@
+{% set description = config.description %}
+{% if page is defined and page.description %}
+  {% set description = page.description %}
+{% elif section is defined and section.description %}
+  {% set description = section.description %}
+{% endif %}
+<meta name="description" content="{{ description }}">
+{% if config.extra.preview_only %}
+<meta name="robots" content="noindex, follow">
+{% endif %}
+{% if current_url is defined %}
+<link rel="canonical" href="{{ current_url | safe }}">
+{% endif %}

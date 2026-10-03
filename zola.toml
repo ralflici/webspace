@@ -1,0 +1,33 @@
+base_url = "https://ralf.shltr.eu"
+title = "Ralf's kernel notes"
+description = "Notes on the ovpn Linux kernel module, networking, and the tools used to build and test them."
+default_language = "en"
+theme = "colorized"
+compile_sass = true
+build_search_index = false
+generate_feeds = true
+feed_filenames = ["atom.xml"]
+taxonomies = [{ name = "tags" }]
+# Treat technical examples as Markdown, without interpreting template syntax.
+skip_content_templating = ["*.md", "**/*.md"]
+
+[markdown]
+github_alerts = true
+
+[markdown.highlighting]
+theme = "catppuccin-mocha"
+
+[extra]
+site_title = "Ralf's kernel notes"
+landing_subtitle = "Linux, ovpn, and things learned along the way."
+copyright_holder = "Ralf"
+# Switch to false when replacing the sample content with real articles.
+preview_only = true
+nav_links = [
+  { name = "blog", path = "/blog/" },
+  { name = "about", path = "/about/" },
+  { name = "tags", path = "/tags/" },
+]
+footer_links = [
+  { name = "feed", path = "/blog/atom.xml" },
+]

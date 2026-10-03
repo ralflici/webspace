@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+site_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$site_root"
+if [ -x "$site_root/.tools/zola" ]; then
+    exec "$site_root/.tools/zola" "$@"
+fi
+if command -v zola >/dev/null 2>&1; then
+    exec zola "$@"
+fi
+printf '%s\n' 'Install Zola 0.23.4 or newer, or put its binary at .tools/zola.' >&2
+exit 1
